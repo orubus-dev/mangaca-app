@@ -1,0 +1,86 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-signed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.24.5
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Scaffold android platform (package app.orubus.mangaca)
+        run: flutter create . --project-name mangaca --org app.orubus --platforms android
+
+      - name: Apply android overlay (applicationId, signing, manifest, icons)
+        run: |
+          cp -rv android-overlay/app/. android/app/
+          echo "--- applied ---"
+          ls -la android/app
+
+      - name: Restore signing keystore + key.properties (secrets only, never committed)
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          echo "$KS_B64" | base64 -d > android/app/mangaca-release.jks
+          cat > android/key.properties <<EOF
+          storeFile=mangaca-release.jks
+          storePassword=$KS_PASS
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KS_PASS
+          EOF
+          ls -la android/app/mangaca-release.jks
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build signed release APK
+        run: flutter build apk --release
+
+      - name: Collect APK
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk mangaca.apk
+          ls -la mangaca.apk
+          sha256sum mangaca.apk | tee mangaca.apk.sha256
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            mangaca.apk
+            mangaca.apk.sha256
+          body: |
+            MANGACA ${{ github.ref_name }} — Read Beyond The Illusion.
+
+            First public Android build. Manga, novels and classics with the iReader engine,
+            plus full TV & movie streaming — played on your own connection, straight from
+            your device.
+
+            - Package: app.orubus.mangaca
+            - Signed release build (install over future updates will be kept intact)
+            - Same account, library and progress as the web — sign in with a genjutsu
+              link code from @orubus_bot on Telegram (/genjutsu)
+          generate_release_notes: false
