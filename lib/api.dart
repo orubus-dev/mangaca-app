@@ -1,4 +1,4 @@
-/* MANGACA api.dart — client for the production runtime (mangaca.pages.dev/api/*).
+/* MANGACA api.dart — client for the production runtime at mangaca.pages.dev.
    Same contracts as the web client. The session token (mg_session) returned
    by sign-in is stored on-device and attached as a cookie on every call —
    the server treats the app exactly like another browser. */

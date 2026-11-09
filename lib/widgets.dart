@@ -110,7 +110,7 @@ class MChip extends StatelessWidget {
   const MChip(this.label, {super.key, this.on = false, this.onTap});
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = context.pal;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -134,7 +134,7 @@ class InfoChip extends StatelessWidget {
   const InfoChip(this.label, {super.key});
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = context.pal;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
@@ -167,7 +167,7 @@ class _SpinBadgeState extends State<SpinBadge> with SingleTickerProviderStateMix
   }
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = context.pal;
     return RotationTransition(
       turns: _c,
       child: Container(
@@ -183,11 +183,6 @@ class _SpinBadgeState extends State<SpinBadge> with SingleTickerProviderStateMix
   }
 }
 
-/* ---------- skeleton ---------- */
-class Skeleton extends Container {
-  const Skeleton({super.key, super.width, super.height, super.margin});
-}
-
 /* ---------- book card (browse grid) ---------- */
 class BookCard extends StatelessWidget {
   final BookItem item;
@@ -196,7 +191,7 @@ class BookCard extends StatelessWidget {
   const BookCard({super.key, required this.item, required this.onTap, this.badge});
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = context.pal;
     return GestureDetector(
       onTap: onTap,
       child: ClipRRect(
@@ -276,7 +271,7 @@ class RailCard extends StatelessWidget {
   const RailCard({super.key, required this.cover, required this.title, required this.sub, required this.onTap, this.chip});
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = context.pal;
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
@@ -352,7 +347,7 @@ class SectionTitle extends StatelessWidget {
   const SectionTitle(this.text, {super.key});
   @override
   Widget build(BuildContext context) {
-    final p = Palette.of(context);
+    final p = context.pal;
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 20, 2, 8),
       child: Text(text, style: tDisplay(12.5).copyWith(color: p.fg, letterSpacing: 1.4)),
@@ -432,7 +427,7 @@ class SheetGrab extends StatelessWidget {
 /* ---------- toasts ---------- */
 void toast(BuildContext context, String msg, {bool err = false}) {
   ScaffoldMessenger.of(context).hideCurrentSnackBar();
-  final p = Palette.of(context);
+  final p = context.pal;
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(msg, style: tUi(12).copyWith(color: p.fg)),

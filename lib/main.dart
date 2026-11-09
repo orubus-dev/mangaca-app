@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'api.dart' as api;
+import 'models.dart';
 import 'store.dart';
 import 'widgets.dart';
 import 'pages/browse.dart';
@@ -295,7 +296,7 @@ Future<void> openAuthSheet(BuildContext context, {VoidCallback? onSignedIn}) asy
   final err = ValueNotifier<String>('');
   final busy = ValueNotifier<bool>(false);
 
-  await showMSheet(context, (ctx) {
+  await showMSheet(context, builder: (ctx) {
     return ValueListenableBuilder<String>(
       valueListenable: err,
       builder: (context, errVal, _) {
@@ -416,7 +417,7 @@ Future<void> openProfileWizard(BuildContext context, {VoidCallback? onDone}) asy
     ('publisher', 'PUBLISHER', 'Run titles & upload series'),
   ];
 
-  await showMSheet(context, (ctx) {
+  await showMSheet(context, builder: (ctx) {
     return ValueListenableBuilder<String>(
       valueListenable: err,
       builder: (context, errVal, _) {
@@ -514,7 +515,7 @@ Future<void> openAccountSheet(BuildContext context, {VoidCallback? onChanged}) a
   final p = context.pal;
   final u = Store.user;
   if (u == null) return;
-  await showMSheet(context, (ctx) {
+  await showMSheet(context, builder: (ctx) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -587,7 +588,7 @@ Future<void> openAccountSheet(BuildContext context, {VoidCallback? onChanged}) a
 
 Future<void> showConsentSheet(BuildContext context, {bool firstRun = false}) async {
   final p = context.pal;
-  await showMSheet(context, (ctx) {
+  await showMSheet(context, builder: (ctx) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,

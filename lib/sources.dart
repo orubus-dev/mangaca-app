@@ -42,7 +42,7 @@ class Source {
 
 class ServerDef {
   final String id, kind, label;
-  ServerDef(this.id, this.kind, this.label);
+  const ServerDef(this.id, this.kind, this.label);
 }
 
 const serverDefs = [
@@ -347,10 +347,10 @@ final mangadex = Source(
         '$_mdApi/manga/$bid/feed?limit=500&order[chapter]=desc&translatedLanguage[]=en&includeEmptyPages=0$_mdRatings');
     return ((j['data'] as List?) ?? const []).whereType<Map<String, dynamic>>().map((ch) {
       final a = (ch['attributes'] as Map<String, dynamic>?) ?? {};
-      final num = a['chapter'] is String ? num.tryParse(a['chapter'] as String) : (a['chapter'] as num?);
+      final chNum = a['chapter'] is String ? num.tryParse(a['chapter'] as String) : (a['chapter'] as num?);
       return Chapter(
         cid: ch['id'] ?? '',
-        number: num ?? 0,
+        number: chNum ?? 0,
         title: (a['title'] ?? '') is String && (a['title'] as String).isNotEmpty
             ? a['title']
             : (a['chapter'] != null ? 'Chapter ${a['chapter']}' : 'Oneshot'),
