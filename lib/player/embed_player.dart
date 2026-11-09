@@ -5,6 +5,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import '../api.dart' as api;
 import '../models.dart';
 import '../widgets.dart';
@@ -29,11 +30,14 @@ class _EmbedPlayerPageState extends State<EmbedPlayerPage> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setMediaPlaybackRequiresUserGesture(false)
       ..setBackgroundColor(const Color(0xFF000000))
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (_) => setState(() => _loading = false),
       ));
+    if (_controller.platform is AndroidWebViewController) {
+      (_controller.platform as AndroidWebViewController)
+          .setMediaPlaybackRequiresUserGesture(false);
+    }
     _resolve();
   }
 

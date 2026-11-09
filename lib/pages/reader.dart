@@ -467,7 +467,7 @@ class _ReaderPageState extends State<ReaderPage> {
   void _openSettings() {
     final p = context.pal;
     if (mode == 'text') {
-      showMSheet(context, (ctx) {
+      showMSheet(context, builder: (ctx) {
         final (bg, fg) = _textColors;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -515,7 +515,7 @@ class _ReaderPageState extends State<ReaderPage> {
       });
       return;
     }
-    showMSheet(context, (ctx) {
+    showMSheet(context, builder: (ctx) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,

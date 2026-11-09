@@ -146,7 +146,7 @@ class _VaultPlayerPageState extends State<VaultPlayerPage> {
     final c = _vc;
     if (c == null) return;
     const rates = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
-    final cur = c.value.playbackRate;
+    final cur = c.value.playbackSpeed;
     var idx = rates.indexWhere((r) => (r - cur).abs() < 0.01);
     final next = rates[(idx + 1) % rates.length];
     c.setPlaybackSpeed(next);
@@ -371,7 +371,7 @@ class _VaultPlayerPageState extends State<VaultPlayerPage> {
                     const SizedBox(width: 6),
                     _pbtn('${tv.seekSeconds}s ↻', () => _seekBy(tv.seekSeconds)),
                     const Spacer(),
-                    _pbtn('${_vc?.value.playbackRate.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '') ?? '1'}×', _cycleSpeed),
+                    _pbtn('${_vc?.value.playbackSpeed.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '') ?? '1'}×', _cycleSpeed),
                     const SizedBox(width: 6),
                     _pbtn(_currentLabel.isEmpty ? '…' : _currentLabel, _cycleQuality),
                     const SizedBox(width: 6),
