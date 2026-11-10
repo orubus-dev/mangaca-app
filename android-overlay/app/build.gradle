@@ -26,7 +26,8 @@ android {
 
     defaultConfig {
         applicationId = "app.orubus.mangaca"
-        minSdk = 21
+        // 24: flutter_tts requires it; Android 7.0 (2016) covers effectively all devices
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
