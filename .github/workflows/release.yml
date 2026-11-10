@@ -31,6 +31,19 @@ jobs:
       - name: Scaffold android platform (package app.orubus.mangaca)
         run: flutter create . --project-name mangaca --org app.orubus --platforms android
 
+      - name: Pin Kotlin compiler to 2.2.20 (plugin ecosystem — flutter_tts ships stdlib 2.2 metadata)
+        run: |
+          python3 - <<'PY'
+          import re, pathlib
+          p = pathlib.Path('android/settings.gradle')
+          s = p.read_text()
+          s2 = re.sub(r'id "org\.jetbrains\.kotlin\.android" version "[^"]+"',
+                      'id "org.jetbrains.kotlin.android" version "2.2.20"', s)
+          assert s2 != s, 'kotlin plugin line not found in settings.gradle'
+          p.write_text(s2)
+          print('\n'.join(l for l in s2.splitlines() if 'kotlin' in l))
+          PY
+
       - name: Apply android overlay (applicationId, signing, manifest, icons, updater)
         run: |
           cp -rv android-overlay/app/. android/app/

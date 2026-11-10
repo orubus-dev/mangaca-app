@@ -58,11 +58,14 @@ def main():
     # previous release APK (best effort)
     prev_apk = 'prev/mangaca.apk'
     env = {**os.environ, 'GH_TOKEN': GH_TOKEN}
-    subprocess.run(
-        ['gh', 'release', 'download', '--repo', REPO, '--pattern', 'mangaca.apk',
-         '--dir', 'prev', '--clobber'],
-        capture_output=True, text=True, env=env,
-    )
+    try:
+        subprocess.run(
+            ['gh', 'release', 'download', '--repo', REPO, '--pattern', 'mangaca.apk',
+             '--dir', 'prev', '--clobber'],
+            capture_output=True, text=True, env=env,
+        )
+    except FileNotFoundError:
+        print('gh CLI unavailable — manifest without deltas')
     have_prev = os.path.exists(prev_apk)
     prev_code = 0
     if have_prev:
