@@ -124,7 +124,7 @@ object Updater {
      */
     fun start(payload: Map<*, *>) {
         val latestRaw = payload["latest"] as? Map<*, *> ?: run {
-            progress("error", 0, 0, 0, "no update payload")
+            progress("error", 0.0, 0L, 0L, "no update payload")
             return
         }
         val latestUrl = (latestRaw["url"] ?: "").toString()
@@ -141,21 +141,21 @@ object Updater {
             if (deltaRaw != null && latestSha.isNotBlank()) {
                 val deltaUrl = (deltaRaw["url"] ?: "").toString()
                 if (deltaUrl.isNotBlank()) {
-                    progress("downloading", 0.0, 0, ((deltaRaw["size"] as? Number)?.toLong() ?: 0L), "downloading delta patch…")
+                    progress("downloading", 0.0, 0L, ((deltaRaw["size"] as? Number)?.toLong() ?: 0L), "downloading delta patch…")
                     val patchFile = File(dir, "delta.bsdiff")
                     val sha = download(deltaUrl, patchFile) { rec, tot -> progress("downloading", pct(rec, tot), rec, tot, "downloading delta patch…") }
                     if (sha != null) {
-                        progress("patching", 0.15, 0, 0, "rebuilding the app on device…")
+                        progress("patching", 0.15, 0L, 0L, "rebuilding the app on device…")
                         val srcApk = File(ctx.applicationInfo.sourceDir ?: "")
                         val out = File(dir, "mangaca-new.apk")
                         val newSha = if (srcApk.exists()) Bspatch.apply(srcApk, patchFile, out) else null
                         if (newSha != null && latestSha.isNotBlank() && newSha.equals(latestSha, ignoreCase = true)) {
-                            progress("verifying", 0.85, 0, 0, "verified against the release manifest")
+                            progress("verifying", 0.85, 0L, 0L, "verified against the release manifest")
                             install(out)
                             return@Thread
                         }
                         out.delete()
-                        progress("downloading", 0.0, 0, latestSize, "delta mismatch — falling back to the full APK…")
+                        progress("downloading", 0.0, 0L, latestSize, "delta mismatch — falling back to the full APK…")
                     }
                     patchFile.delete()
                 }
@@ -163,19 +163,19 @@ object Updater {
 
             // --- the plain path: full APK from the release ---
             val apk = File(dir, "mangaca.apk")
-            progress("downloading", 0.0, 0, latestSize, "downloading the update…")
+            progress("downloading", 0.0, 0L, latestSize, "downloading the update…")
             val sha = download(latestUrl, apk) { rec, tot -> progress("downloading", pct(rec, tot), rec, tot, "downloading the update…") }
             if (sha == null) {
-                progress("error", 0, 0, 0, "download failed — check the connection and try again")
+                progress("error", 0.0, 0L, 0L, "download failed — check the connection and try again")
                 apk.delete()
                 return@Thread
             }
             if (latestSha.isNotBlank() && !sha.equals(latestSha, ignoreCase = true)) {
-                progress("error", 0, 0, 0, "the download didn't match — try again in a bit")
+                progress("error", 0.0, 0L, 0L, "the download didn't match — try again in a bit")
                 apk.delete()
                 return@Thread
             }
-            progress("verifying", 0.9, 0, 0, "verified against the release manifest")
+            progress("verifying", 0.9, 0L, 0L, "verified against the release manifest")
             install(apk)
         }.start()
     }
@@ -245,12 +245,12 @@ object Updater {
                             android.net.Uri.parse("package:${ctx.packageName}"),
                         )
                     )
-                    progress("installing", 1.0, 0, 0, "allow MANGACA to install updates — then tap UPDATE again")
+                    progress("installing", 1.0, 0L, 0L, "allow MANGACA to install updates — then tap UPDATE again")
                 } catch (_: Exception) {
-                    progress("error", 0, 0, 0, "couldn't open the install-permission screen")
+                    progress("error", 0.0, 0L, 0L, "couldn't open the install-permission screen")
                 }
             } else {
-                progress("error", 0, 0, 0, "install permission missing")
+                progress("error", 0.0, 0L, 0L, "install permission missing")
             }
             return
         }
@@ -277,9 +277,9 @@ object Updater {
             )
             session.commit(pending.intentSender)
             session.close()
-            progress("installing", 1.0, 0, 0, "ready — confirm the install in the system dialog")
+            progress("installing", 1.0, 0L, 0L, "ready — confirm the install in the system dialog")
         } catch (e: Exception) {
-            progress("error", 0, 0, 0, "couldn't start the install — ${e.message ?: "try again"}")
+            progress("error", 0.0, 0L, 0L, "couldn't start the install — ${e.message ?: "try again"}")
         }
     }
 }

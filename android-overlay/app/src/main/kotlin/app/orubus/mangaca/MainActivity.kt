@@ -22,8 +22,8 @@ class MainActivity : FlutterActivity() {
                 "installedVersion" -> result.success(Updater.installedInfo())
                 "check" -> Updater.check(result)
                 "start" -> {
-                    @Suppress("UNCHECKED_CAST")
-                    Updater.start(call.arguments() as? Map<String, Any?> ?: emptyMap())
+                    val args = call.arguments<Map<*, *>>() ?: emptyMap<Any, Any>()
+                    Updater.start(args)
                     result.success(true)
                 }
                 else -> result.notImplemented()
