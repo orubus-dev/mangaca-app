@@ -1,12 +1,20 @@
 {
   "latest": {
-    "version": "0.0.2",
-    "code": 2,
-    "name": "0.0.2",
-    "url": "https://github.com/orubus-dev/mangaca-app/releases/download/v0.0.2/mangaca.apk",
-    "sha256": "42b0bff6da2c15db40c5f1b9f00a0d49e38b5349a7d450eee9ad71fcff2fbbdf",
-    "size": 55575969,
-    "notes": "MANGACA 0.0.2 \u2014 Read Beyond The Illusion"
+    "version": "0.0.3",
+    "code": 3,
+    "name": "0.0.3",
+    "url": "https://github.com/orubus-dev/mangaca-app/releases/download/v0.0.3/mangaca.apk",
+    "sha256": "a2740254b2bdfc02db55946916851b8fe6350d0cfb02ee867c0baadee802f599",
+    "size": 55592353,
+    "notes": "MANGACA 0.0.3 \u2014 Read Beyond The Illusion"
   },
-  "deltas": {}
+  "deltas": {
+    "2": {
+      "from": 2,
+      "to": 3,
+      "url": "https://github.com/orubus-dev/mangaca-app/releases/download/v0.0.3/mangaca-delta.bsdiff",
+      "sha256": "0ac50f81d05597056da5a22029620757130b0d0e7212ef6145496ddc202d05e0",
+      "size": 2174330
+    }
+  }
 }
