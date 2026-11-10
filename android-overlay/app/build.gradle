@@ -55,3 +55,8 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // bspatch delta updates (Bspatch.kt decodes the BSDIFF40 bzip2 streams)
+    implementation 'org.apache.commons:commons-compress:1.21'
+}

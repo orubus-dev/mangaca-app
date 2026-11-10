@@ -54,7 +54,7 @@ const serverDefs = [
 ];
 
 Future<List<BookItem>> _serverList(ServerDef def, String tab, int page) async {
-  final r = await api.catalogBrowse(def.kind, tab, page);
+  final r = await api.catalogBrowse(def.kind, tab, page).timeout(const Duration(seconds: 20));
   if (r['ok'] != true) return [];
   final items = (r['items'] as List?) ?? const [];
   return items
@@ -65,7 +65,7 @@ Future<List<BookItem>> _serverList(ServerDef def, String tab, int page) async {
             bid: (it['id'] ?? '').toString(),
             title: it['title'] ?? '',
             cover: it['cover'] != null && (it['cover'] as String).isNotEmpty
-                ? api.imgx(it['cover'])
+                ? api.bookCover(it['cover'])
                 : '',
             src: def.label,
             kind: def.kind,
@@ -74,7 +74,7 @@ Future<List<BookItem>> _serverList(ServerDef def, String tab, int page) async {
 }
 
 Future<List<BookItem>> _serverSearch(ServerDef def, String q, int page) async {
-  final r = await api.catalogSearch(q, def.kind, page);
+  final r = await api.catalogSearch(q, def.kind, page).timeout(const Duration(seconds: 20));
   if (r['ok'] != true) return [];
   final items = (r['items'] as List?) ?? const [];
   return items
@@ -85,7 +85,7 @@ Future<List<BookItem>> _serverSearch(ServerDef def, String q, int page) async {
             bid: (it['id'] ?? '').toString(),
             title: it['title'] ?? '',
             cover: it['cover'] != null && (it['cover'] as String).isNotEmpty
-                ? api.imgx(it['cover'])
+                ? api.bookCover(it['cover'])
                 : '',
             src: def.label,
             kind: def.kind,
@@ -110,7 +110,7 @@ Source serverSource(ServerDef def) => Source(
           title: r['title'] ?? 'Untitled',
           author: r['author'] ?? '',
           cover: (r['cover'] ?? '') is String && (r['cover'] as String).isNotEmpty
-              ? api.imgx(r['cover'])
+              ? api.bookCover(r['cover'])
               : '',
           src: def.label,
           status: r['status'] ?? 'unknown',
@@ -151,7 +151,9 @@ Map<String, dynamic>? _catalogCache;
 
 Future<Map<String, dynamic>> originalsCatalog() async {
   if (_catalogCache != null) return _catalogCache!;
-  final r = await http.get(Uri.parse(api.abs('assets/catalog.json')));
+  final r = await http
+      .get(Uri.parse(api.abs('assets/catalog.json')))
+      .timeout(const Duration(seconds: 15));
   _catalogCache = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
   return _catalogCache!;
 }
@@ -282,9 +284,56 @@ BookItem _mdItem(Map<String, dynamic> item) {
 }
 
 Future<Map<String, dynamic>> _mdJson(String url) async {
-  final r = await http.get(Uri.parse(url), headers: {'User-Agent': 'MANGACA/0.0.1 (Android)'});
+  final r = await http
+      .get(Uri.parse(url), headers: {'User-Agent': 'MANGACA/0.0.1 (Android)'})
+      .timeout(const Duration(seconds: 15));
   if (r.statusCode != 200) throw ApiException('mangadex ${r.statusCode}');
   return jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+}
+
+/* comics lane — MangaDex tag catalogs, device-direct (same tags as web):
+   Web Comic / 4-Koma / Anthology / Oneshot. */
+const mdTagWebComic = 'e197df38-d0e7-43b5-9b09-2842d0c326dd';
+const mdTag4Koma = 'b11fda93-8f1d-4bef-b2ed-8803d3733170';
+const mdTagAnthology = '51d83883-4103-437c-b4b1-731cb73d786c';
+const mdTagOneshot = '0234a31e-a729-4e28-9d6a-3f87c4966b9e';
+
+Future<List<BookItem>> mdByTag(String tag, int page, {String label = 'COMICS'}) async {
+  final p = page < 1 ? 1 : page;
+  final j = await _mdJson(
+      '$_mdApi/manga?limit=$_mdLimit&offset=${(p - 1) * _mdLimit}&includes[]=cover_art&includedTags[]=${Uri.encodeComponent(tag)}&includedTagsMode=AND&hasAvailableChapters=true&order[followedCount]=desc$_mdRatings');
+  return ((j['data'] as List?) ?? const [])
+      .whereType<Map<String, dynamic>>()
+      .map(_mdItem)
+      .map((b) => BookItem(
+            sid: b.sid,
+            bid: b.bid,
+            title: b.title,
+            cover: b.cover,
+            src: label,
+            kind: 'comic',
+            status: b.status,
+          ))
+      .toList();
+}
+
+Future<List<BookItem>> comicPopular(int page) => mdByTag(mdTagWebComic, page);
+Future<List<BookItem>> comicLatest(int page) async {
+  final j = await _mdJson(
+      '$_mdApi/manga?limit=$_mdLimit&offset=${(page - 1) * _mdLimit}&includes[]=cover_art&includedTags[]=${Uri.encodeComponent(mdTagWebComic)}&includedTagsMode=AND&hasAvailableChapters=true&order[latestUploaded]=desc$_mdRatings');
+  return ((j['data'] as List?) ?? const [])
+      .whereType<Map<String, dynamic>>()
+      .map(_mdItem)
+      .map((b) => BookItem(
+            sid: b.sid,
+            bid: b.bid,
+            title: b.title,
+            cover: b.cover,
+            src: 'COMICS',
+            kind: 'comic',
+            status: b.status,
+          ))
+      .toList();
 }
 
 final mangadex = Source(
@@ -374,7 +423,10 @@ final mangadex = Source(
   },
 );
 
-/* ---------- GUTENBERG (via the runtime proxy — same as web) ---------- */
+/* ---------- GUTENBERG (classics — via the server catalog lane) ----------
+   gutendex.com is bot-walled from every residential/datacenter path except
+   our own edge's cached runtime lane, so popular/latest/search ride the
+   server catalog (seed-backed) and text/covers load device-direct. */
 
 String _gutTxt(String id) => 'https://www.gutenberg.org/cache/epub/$id/pg$id.txt';
 String _gutCover(String id) =>
@@ -395,71 +447,30 @@ const gutenbergSeed = [
   {'id': '1184', 'title': 'The Count of Monte Cristo', 'author': 'Alexandre Dumas'},
 ];
 
-BookItem _gutItem(dynamic b) {
-  final m = b as Map<String, dynamic>;
-  final formats = (m['formats'] as Map<String, dynamic>?) ?? {};
-  final cov = formats['image/jpeg'] ?? '';
-  return BookItem(
-    sid: 'gutenberg',
-    bid: (m['id'] ?? '').toString(),
-    title: m['title'] ?? '',
-    author: ((m['authors'] as List?) ?? const []).isNotEmpty
-        ? (((m['authors'] as List).first as Map<String, dynamic>)['name'] ?? 'Unknown') as String
-        : 'Unknown',
-    cover: cov is String && cov.isNotEmpty ? api.px(cov) : api.px(_gutCover((m['id'] ?? '').toString())),
-    src: 'NOVELS',
-    status: 'published',
-    kind: 'novel',
-  );
-}
-
 BookItem _gutSeedItem(Map<String, String> s) => BookItem(
       sid: 'gutenberg',
       bid: s['id']!,
       title: s['title']!,
       author: s['author']!,
-      cover: api.px(_gutCover(s['id']!)),
-      src: 'NOVELS',
+      cover: api.bookCover(_gutCover(s['id']!)),
+      src: 'CLASSICS',
       status: 'published',
-      kind: 'novel',
+      kind: 'book',
     );
-
-Future<List<dynamic>> _tryGutendex(String qs) async {
-  final r = await http.get(Uri.parse(api.px('https://gutendex.com/books$qs')));
-  if (r.statusCode != 200) throw ApiException('gutendex ${r.statusCode}');
-  final j = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
-  final results = (j['results'] as List?) ?? const [];
-  if (results.isEmpty) throw ApiException('empty');
-  return results;
-}
 
 Future<String> gutenbergText(String bid) async {
   final id = bid.toString();
-  final candidates = <String>[];
-  try {
-    final rows = await _tryGutendex('?ids=$id');
-    if (rows.isNotEmpty) {
-      final b = rows.first as Map<String, dynamic>;
-      final formats = (b['formats'] as Map<String, dynamic>?) ?? {};
-      String? u;
-      for (final key in formats.keys) {
-        if (key.startsWith('text/plain')) {
-          final v = formats[key];
-          if (v is String && v.isNotEmpty) {
-            u = v;
-            break;
-          }
-        }
-      }
-      if (u != null) candidates.add(u);
-    }
-  } catch (_) {}
-  candidates.add(_gutTxt(id));
-  candidates.add('https://www.gutenberg.org/files/$id/$id-0.txt');
-  candidates.add('https://www.gutenberg.org/files/$id/$id.txt');
+  /* direct candidates only — the old gutendex formats probe added a
+     guaranteed 25s timeout stall to every classic before its first word. */
+  final candidates = <String>[
+    _gutTxt(id),
+    'https://www.gutenberg.org/files/$id/$id-0.txt',
+    'https://www.gutenberg.org/files/$id/$id.txt',
+    'https://www.gutenberg.org/cache/epub/$id/pg$id.txt.utf-8',
+  ];
   for (final url in candidates) {
     try {
-      final r = await http.get(Uri.parse(api.px(url))).timeout(const Duration(seconds: 45));
+      final r = await http.get(Uri.parse(api.px(url))).timeout(const Duration(seconds: 30));
       if (r.statusCode != 200) continue;
       final raw = utf8.decode(r.bodyBytes, allowMalformed: true);
       if (raw.trimLeft().startsWith('<') || RegExp(r'<html[\s>]', caseSensitive: false).hasMatch(raw.substring(0, raw.length > 400 ? 400 : raw.length))) {
@@ -483,91 +494,102 @@ String stripGutenbergBoilerplate(String raw) {
   return body.replaceAll('\r\n', '\n').trim();
 }
 
+/* classics list lane — server catalog (gutenberg kind = book), seed-backed */
+Future<List<BookItem>> _gutLane(String tab, int page) async {
+  try {
+    final r = await api.catalogBrowse('book', tab, page).timeout(const Duration(seconds: 20));
+    final items = (r['items'] as List?) ?? const [];
+    final rows = items
+        .whereType<Map<String, dynamic>>()
+        .where((it) => it['src'] == 'gutenberg')
+        .map((it) => BookItem(
+              sid: 'gutenberg',
+              bid: (it['id'] ?? '').toString(),
+              title: it['title'] ?? '',
+              cover: (it['cover'] ?? '') is String && (it['cover'] as String).isNotEmpty
+                  ? api.bookCover(it['cover'])
+                  : api.bookCover(_gutCover((it['id'] ?? '').toString())),
+              src: 'CLASSICS',
+              kind: 'book',
+            ))
+        .toList();
+    if (rows.isNotEmpty) return rows;
+  } catch (_) {}
+  return gutenbergSeed.map(_gutSeedItem).toList();
+}
+
 final gutenberg = Source(
   id: 'gutenberg',
-  kind: 'novel',
+  kind: 'book',
   label: 'CLASSICS',
   server: false,
-  popular: (page) async {
-    try {
-      return (await _tryGutendex('?sort=downloads&page=${page.clamp(1, 99)}'))
-          .map(_gutItem)
-          .toList();
-    } catch (_) {
-      return gutenbergSeed.map(_gutSeedItem).toList();
-    }
-  },
-  latest: (page) async {
-    try {
-      return (await _tryGutendex('?sort=descending&page=${page.clamp(1, 99)}'))
-          .map(_gutItem)
-          .toList();
-    } catch (_) {
-      return gutenbergSeed.map(_gutSeedItem).toList().reversed.toList();
-    }
-  },
+  popular: (page) => _gutLane('popular', page),
+  latest: (page) => _gutLane('latest', page),
   search: (q, page) async {
     try {
-      return (await _tryGutendex('?search=${Uri.encodeComponent(q)}&page=${page.clamp(1, 99)}'))
-          .map(_gutItem)
+      final r = await api.catalogSearch(q, 'book', page).timeout(const Duration(seconds: 20));
+      final items = (r['items'] as List?) ?? const [];
+      final rows = items
+          .whereType<Map<String, dynamic>>()
+          .where((it) => it['src'] == 'gutenberg')
+          .map((it) => BookItem(
+                sid: 'gutenberg',
+                bid: (it['id'] ?? '').toString(),
+                title: it['title'] ?? '',
+                cover: (it['cover'] ?? '') is String && (it['cover'] as String).isNotEmpty
+                    ? api.bookCover(it['cover'])
+                    : api.bookCover(_gutCover((it['id'] ?? '').toString())),
+                src: 'CLASSICS',
+                kind: 'book',
+              ))
           .toList();
-    } catch (_) {
-      final lq = q.toLowerCase();
-      return gutenbergSeed
-          .where((s) => ('${s['title']} ${s['author']}').toLowerCase().contains(lq))
-          .map(_gutSeedItem)
-          .toList();
-    }
+      if (rows.isNotEmpty) return rows;
+    } catch (_) {}
+    final lq = q.toLowerCase();
+    return gutenbergSeed
+        .where((s) => ('${s['title']} ${s['author']}').toLowerCase().contains(lq))
+        .map(_gutSeedItem)
+        .toList();
   },
   details: (bid, _) async {
     try {
-      final rows = await _tryGutendex('?ids=$bid');
-      final b = rows.first as Map<String, dynamic>;
-      final formats = (b['formats'] as Map<String, dynamic>?) ?? {};
-      final cov = formats['image/jpeg'] ?? '';
-      final authors = (b['authors'] as List?) ?? const [];
-      String year = '';
-      if (authors.isNotEmpty) {
-        final by = ((authors.first as Map<String, dynamic>)['birth_year'] ?? '').toString();
-        if (by != 'null' && by.isNotEmpty) year = by;
+      final r = await api.catalogDetails('gutenberg', bid.toString()).timeout(const Duration(seconds: 20));
+      if (r['ok'] == true) {
+        return BookItem(
+          sid: 'gutenberg',
+          bid: bid.toString(),
+          title: r['title'] ?? 'Untitled',
+          author: r['author'] ?? 'Unknown',
+          cover: (r['cover'] ?? '') is String && (r['cover'] as String).isNotEmpty
+              ? api.bookCover(r['cover'])
+              : api.bookCover(_gutCover(bid.toString())),
+          src: 'CLASSICS',
+          status: 'published',
+          tags: (r['genres'] ?? '') is String && (r['genres'] as String).isNotEmpty
+              ? (r['genres'] as String).split(',').take(6).map((s) => s.trim()).where((s) => s.isNotEmpty).toList()
+              : ['classic', 'public domain'],
+          synopsis: (r['description'] ?? '') is String && (r['description'] as String).isNotEmpty
+              ? r['description']
+              : 'A public-domain classic, free to read in the iReader engine.',
+          kind: 'book',
+        );
       }
-      return BookItem(
-        sid: 'gutenberg',
-        bid: bid.toString(),
-        title: b['title'] ?? '',
-        author: authors.isNotEmpty
-            ? (((authors.first as Map<String, dynamic>)['name'] ?? 'Unknown') as String)
-            : 'Unknown',
-        cover: cov is String && cov.isNotEmpty ? api.px(cov) : api.px(_gutCover(bid)),
-        src: 'NOVELS',
-        status: 'published',
-        year: year,
-        tags: ((b['subjects'] as List?) ?? const [])
-            .map((s) => (s as String).split(' -- ').first)
-            .take(6)
-            .toList(),
-        synopsis: ((b['summaries'] as List?) ?? const []).isNotEmpty
-            ? (b['summaries'] as List).first as String
-            : 'A public-domain classic, free to read in the iReader engine.',
-        kind: 'novel',
-      );
-    } catch (_) {
-      final seeds = gutenbergSeed.where((s) => s['id'] == bid.toString()).toList();
-      if (seeds.isEmpty) throw ApiException('book not found');
-      final s = seeds.first;
-      return BookItem(
-        sid: 'gutenberg',
-        bid: s['id']!,
-        title: s['title']!,
-        author: s['author']!,
-        cover: api.px(_gutCover(s['id']!)),
-        src: 'NOVELS',
-        status: 'published',
-        tags: ['classic', 'public domain'],
-        synopsis: 'A public-domain classic, free to read in the iReader engine.',
-        kind: 'novel',
-      );
-    }
+    } catch (_) {}
+    final seeds = gutenbergSeed.where((s) => s['id'] == bid.toString()).toList();
+    if (seeds.isEmpty) throw ApiException('book not found');
+    final s = seeds.first;
+    return BookItem(
+      sid: 'gutenberg',
+      bid: s['id']!,
+      title: s['title']!,
+      author: s['author']!,
+      cover: api.bookCover(_gutCover(s['id']!)),
+      src: 'CLASSICS',
+      status: 'published',
+      tags: ['classic', 'public domain'],
+      synopsis: 'A public-domain classic, free to read in the iReader engine.',
+      kind: 'book',
+    );
   },
   chapters: (_) async => [Chapter(cid: 'full', number: 1, title: 'Full text', pages: 0)],
   pages: (_, __) async => const [],
@@ -601,7 +623,7 @@ List<BookItem> _interleave(List<List<BookItem>> lists) {
 }
 
 Future<List<BookItem>> _catalogLane(String kind, String tab, int page) async {
-  final r = await api.catalogBrowse(kind, tab, page);
+  final r = await api.catalogBrowse(kind, tab, page).timeout(const Duration(seconds: 20));
   if (r['ok'] != true) return [];
   return ((r['items'] as List?) ?? const [])
       .whereType<Map<String, dynamic>>()
@@ -616,12 +638,60 @@ Future<List<BookItem>> _catalogLane(String kind, String tab, int page) async {
           bid: (it['id'] ?? '').toString(),
           title: it['title'] ?? '',
           cover: it['cover'] != null && (it['cover'] as String).isNotEmpty
-              ? api.imgx(it['cover'])
+              ? api.bookCover(it['cover'])
               : '',
           src: label,
           kind: (it['kind'] ?? kind).toString(),
         );
       })
+      .toList();
+}
+
+/* gutendex topic rails (novels & classics) — server lane, seed-free.
+   Returns books with the caller's kind so cards label correctly. */
+Future<List<BookItem>> topicLane(String topic, String kind, int page) async {
+  final r = await api.catalogTopic(topic, page).timeout(const Duration(seconds: 20));
+  final items = (r['items'] as List?) ?? const [];
+  return items
+      .whereType<Map<String, dynamic>>()
+      .map((it) => BookItem(
+            sid: (it['src'] ?? 'gutenberg').toString(),
+            bid: (it['id'] ?? '').toString(),
+            title: it['title'] ?? '',
+            cover: (it['cover'] ?? '') is String && (it['cover'] as String).isNotEmpty
+                ? api.bookCover(it['cover'])
+                : '',
+            src: kind == 'book' ? 'CLASSICS' : 'NOVELS',
+            kind: kind,
+          ))
+      .toList();
+}
+
+/* AniList genre discovery (device-direct, bot-friendly) — feeds the manga
+   genre rails. Items are discovery cards: tapping resolves the title into a
+   readable source via global title search. */
+Future<List<BookItem>> anilistGenre(String genre) async {
+  const q = r'query($g:[String]){Page(page:1,perPage:14){media(sort:TRENDING_DESC,genre_in:$g,type:MANGA){title{english romaji}coverImage{large}}}}';
+  final r = await http
+      .post(
+        Uri.parse('https://graphql.anilist.co'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'query': q, 'variables': {'g': [genre]}}),
+      )
+      .timeout(const Duration(seconds: 12));
+  if (r.statusCode != 200) throw ApiException('anilist ${r.statusCode}');
+  final j = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+  final page = (j['data'] as Map<String, dynamic>?)?['Page'] as Map<String, dynamic>?;
+  final media = (page?['media'] as List?) ?? const [];
+  return media
+      .whereType<Map<String, dynamic>>()
+      .map((m) {
+        final t = (m['title'] as Map<String, dynamic>?) ?? {};
+        final title = ((t['english'] ?? t['romaji'] ?? '') as String).trim();
+        final cov = ((m['coverImage'] as Map<String, dynamic>?)?['large'] ?? '') as String;
+        return BookItem(sid: 'disco', bid: '', title: title, cover: cov, src: 'MANGA', kind: 'manga');
+      })
+      .where((b) => b.title.isNotEmpty)
       .toList();
 }
 
@@ -681,7 +751,7 @@ Future<List<TrendItem>> trending() async {
   } catch (_) {}
   // fallback: MangaDex popular
   try {
-    final items = await mangadex.popular(1);
+    final items = await mangadex.popular(1).timeout(const Duration(seconds: 12));
     return items.take(14).map((b) => TrendItem(title: b.title, cover: b.cover, sub: 'MANGA', match: b.title)).toList();
   } catch (_) {}
   return [

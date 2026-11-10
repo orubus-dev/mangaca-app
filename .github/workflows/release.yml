@@ -31,11 +31,11 @@ jobs:
       - name: Scaffold android platform (package app.orubus.mangaca)
         run: flutter create . --project-name mangaca --org app.orubus --platforms android
 
-      - name: Apply android overlay (applicationId, signing, manifest, icons)
+      - name: Apply android overlay (applicationId, signing, manifest, icons, updater)
         run: |
           cp -rv android-overlay/app/. android/app/
           echo "--- applied ---"
-          ls -la android/app
+          ls -la android/app/src/main/kotlin/app/orubus/mangaca
 
       - name: Restore signing keystore + key.properties (secrets only, never committed)
         env:
@@ -64,6 +64,29 @@ jobs:
           ls -la mangaca.apk
           sha256sum mangaca.apk | tee mangaca.apk.sha256
 
+      - name: Generate delta patch + release manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -e
+          python3 -m pip install --quiet bsdiff4
+          python3 scripts/make_manifest.py
+          cat release/updates.json
+
+      - name: Commit release/updates.json (the updater's manifest)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add release/updates.json
+          if git diff --cached --quiet; then
+            echo "manifest unchanged"
+          else
+            git commit -m "release manifest ${{ github.ref_name }} [skip ci]"
+            git push origin HEAD:main || echo "manifest push skipped (non-blocking)"
+          fi
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -72,15 +95,19 @@ jobs:
           files: |
             mangaca.apk
             mangaca.apk.sha256
+            mangaca-delta.bsdiff
           body: |
             MANGACA ${{ github.ref_name }} — Read Beyond The Illusion.
 
-            First public Android build. Manga, novels and classics with the iReader engine,
-            plus full TV & movie streaming — played on your own connection, straight from
-            your device.
+            v0.0.2 "SYNCREAD":
 
-            - Package: app.orubus.mangaca
-            - Signed release build (install over future updates will be kept intact)
-            - Same account, library and progress as the web — sign in with a genjutsu
-              link code from @orubus_bot on Telegram (/genjutsu)
+            - Boot hardening — feed renders instantly, every rail loads on its own with
+              hard timeouts + one-tap RETRY. No more stuck loading screen.
+            - COMICS class — WEB COMICS / 4-KOMA / ANTHOLOGY / ONESHOTS, device-direct.
+            - Classics & novels — covers fixed, topic rails, letter fallbacks.
+            - Read-aloud TTS — speed / tone / volume, sentence highlight, solid transport.
+            - Touch lock — explicit lock icon freezes all touches while you read.
+            - Delta self-updater — Settings › APP UPDATES: check → download → on-device
+              bsdiff rebuild → verify → install, idempotent progress bar.
+            - Package app.orubus.mangaca · signed release · genjutsu identity via @orubus_bot
           generate_release_notes: false

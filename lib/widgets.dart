@@ -184,6 +184,33 @@ class _SpinBadgeState extends State<SpinBadge> with SingleTickerProviderStateMix
 }
 
 /* ---------- book card (browse grid) ---------- */
+/* deterministic pastel from the title — every no-cover state still looks
+   like a card, never like a broken image */
+const kLetterHues = [
+  Color(0xFF3D2C3E), Color(0xFF2C3A3E), Color(0xFF3E2C2C),
+  Color(0xFF2C3E2F), Color(0xFF2E2C3E), Color(0xFF3E3A2C),
+];
+
+class LetterCover extends StatelessWidget {
+  final String title;
+  final String? label;
+  const LetterCover({super.key, required this.title, this.label});
+  @override
+  Widget build(BuildContext context) {
+    final p = context.pal;
+    final t = title.trim().isEmpty ? '?' : title.trim();
+    final hue = kLetterHues[t.codeUnitAt(0) % kLetterHues.length];
+    return Container(
+      color: hue,
+      alignment: Alignment.center,
+      child: Text(
+        t.substring(0, 1).toUpperCase(),
+        style: tDisplay(30).copyWith(color: p.fg.withOpacity(0.85)),
+      ),
+    );
+  }
+}
+
 class BookCard extends StatelessWidget {
   final BookItem item;
   final VoidCallback onTap;
@@ -201,11 +228,12 @@ class BookCard extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
+              LetterCover(title: item.title),
               if (item.cover.isNotEmpty)
                 Image.network(
                   item.cover,
                   fit: BoxFit.cover,
-                  headers: const {'User-Agent': 'MANGACA/0.0.1 (Android)'},
+                  headers: const {'User-Agent': 'MANGACA/0.0.2 (Android)'},
                   errorBuilder: (_, __, ___) => const SizedBox(),
                   loadingBuilder: (c, w, prog) =>
                       prog == null ? w : const ColoredBox(color: Color(0x00000000)),
@@ -287,14 +315,19 @@ class RailCard extends StatelessWidget {
                     width: 110,
                     height: 158,
                     color: p.bg3,
-                    child: cover.isNotEmpty
-                        ? Image.network(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        LetterCover(title: title),
+                        if (cover.isNotEmpty)
+                          Image.network(
                             cover,
                             fit: BoxFit.cover,
-                            headers: const {'User-Agent': 'MANGACA/0.0.1 (Android)'},
+                            headers: const {'User-Agent': 'MANGACA/0.0.2 (Android)'},
                             errorBuilder: (_, __, ___) => const SizedBox(),
-                          )
-                        : const SizedBox(),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
                 if (chip != null)

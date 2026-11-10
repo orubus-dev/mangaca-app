@@ -20,12 +20,28 @@ class TvPrefs {
       );
 }
 
+/* read-aloud prefs — rate 1.0 = normal speed, pitch 1.0 = natural tone */
+class TtsPrefs {
+  double rate;
+  double pitch;
+  double volume;
+  TtsPrefs({this.rate = 1.0, this.pitch = 1.0, this.volume = 1.0});
+
+  Map<String, dynamic> toJson() => {'rate': rate, 'pitch': pitch, 'volume': volume};
+  factory TtsPrefs.fromJson(dynamic j) => TtsPrefs(
+        rate: (j is Map && j['rate'] is num) ? (j['rate'] as num).toDouble() : 1.0,
+        pitch: (j is Map && j['pitch'] is num) ? (j['pitch'] as num).toDouble() : 1.0,
+        volume: (j is Map && j['volume'] is num) ? (j['volume'] as num).toDouble() : 1.0,
+      );
+}
+
 class AppSettings {
   String theme; // auto | dark | light
   String readerMode; // webtoon | paged-ltr | paged-rtl
   String textTheme; // paper | sepia | night | black
   int textSize;
   TvPrefs tv;
+  TtsPrefs tts;
   String cookieMode; // essential | all | not set
   AppSettings({
     this.theme = 'auto',
@@ -33,8 +49,10 @@ class AppSettings {
     this.textTheme = 'night',
     this.textSize = 18,
     TvPrefs? tv,
+    TtsPrefs? tts,
     this.cookieMode = 'not set',
-  }) : tv = tv ?? TvPrefs();
+  })  : tv = tv ?? TvPrefs(),
+        tts = tts ?? TtsPrefs();
 
   Map<String, dynamic> toJson() => {
         'theme': theme,
@@ -42,6 +60,7 @@ class AppSettings {
         'textTheme': textTheme,
         'textSize': textSize,
         'tv': tv.toJson(),
+        'tts': tts.toJson(),
         'cookieMode': cookieMode,
       };
   factory AppSettings.fromJson(dynamic j) {
@@ -52,6 +71,7 @@ class AppSettings {
       textTheme: m['textTheme'] ?? 'night',
       textSize: (m['textSize'] ?? 18) is int ? m['textSize'] : 18,
       tv: TvPrefs.fromJson(m['tv']),
+      tts: TtsPrefs.fromJson(m['tts']),
       cookieMode: m['cookieMode'] ?? 'not set',
     );
   }

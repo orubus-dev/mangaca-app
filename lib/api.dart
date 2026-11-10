@@ -21,6 +21,14 @@ String abs(String u) {
 String px(String u) => '$BASE/api/proxy?u=${Uri.encodeComponent(u)}';
 String imgx(String u) => '$BASE/api/img?u=${Uri.encodeComponent(u)}';
 
+/* cover fixer — gutenberg serves .cover.medium.jpg; the .large variant 404s
+   for most books, so any large URL is rewritten down before it goes through
+   the (allowlisted) image proxy. */
+String bookCover(String u) {
+  final url = u.replaceAll('.cover.large.jpg', '.cover.medium.jpg');
+  return imgx(url);
+}
+
 class ApiException implements Exception {
   final String message;
   ApiException(this.message);
@@ -127,6 +135,11 @@ Future<Map<String, dynamic>> progressSave(String book, String chapter, int page,
 /* ---------------- catalog (server extension layer) ---------------- */
 Future<Map<String, dynamic>> catalogBrowse(String kind, String tab, int page) =>
     get('/api/catalog/browse?kind=$kind&tab=$tab&page=$page');
+
+/* gutendex topic rails for novels & classics (server lane — gutendex is
+   bot-walled from anywhere except our edge's cached path). */
+Future<Map<String, dynamic>> catalogTopic(String topic, int page) =>
+    get('/api/catalog/browse?topic=${Uri.encodeComponent(topic)}&page=$page');
 Future<Map<String, dynamic>> catalogSearch(String q, String kind, int page) =>
     get('/api/catalog/search?q=${Uri.encodeComponent(q)}&kind=$kind&page=$page');
 Future<Map<String, dynamic>> catalogDetails(String src, String id, {String cover = ''}) =>
