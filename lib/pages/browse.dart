@@ -297,10 +297,12 @@ class _ForYouFeedState extends State<ForYouFeed> with AutomaticKeepAliveClientMi
     ));
   }
 
-  void _openTrend(RailCardData t) async {
-    toast(context, 'Finding "${t.title}"…');
+  /* discovery rows (trending + AniList genre) resolve through the title into
+     a readable source */
+  void _openTrendTitle(String title, String cover) async {
+    toast(context, 'Finding "$title"…');
     try {
-      final res = await globalSearch(t.title, 1).timeout(const Duration(seconds: 15));
+      final res = await globalSearch(title, 1).timeout(const Duration(seconds: 15));
       if (res.isEmpty) {
         if (mounted) toast(context, 'No readable source carries this yet', err: true);
         return;
@@ -324,7 +326,7 @@ class _ForYouFeedState extends State<ForYouFeed> with AutomaticKeepAliveClientMi
   }
 
   RailCardData trendCard(TrendItem t) => RailCardData(
-        cover: t.cover, title: t.title, sub: t.sub, onTap: () => _openTrend(t));
+        cover: t.cover, title: t.title, sub: t.sub, onTap: () => _openTrendTitle(t.title, t.cover));
 
   RailCardData bookCardData(BookItem b, {String? sub}) => RailCardData(
         cover: b.cover, title: b.title, sub: sub ?? b.author, onTap: () => _openBook(b));
@@ -455,7 +457,7 @@ class _ForYouFeedState extends State<ForYouFeed> with AutomaticKeepAliveClientMi
                   cover: b.cover,
                   title: b.title,
                   sub: 'TAP TO FIND A SOURCE',
-                  onTap: () => _openTrend(RailCardData(cover: b.cover, title: b.title, sub: '', onTap: () {})),
+                  onTap: () => _openTrendTitle(b.title, b.cover),
                 ))
             .toList();
       },
@@ -658,7 +660,7 @@ class _PopularGridState extends State<_PopularGrid> {
           .toList();
       if (rows.isNotEmpty) return rows;
     } catch (_) {}
-    return gutenbergSeed.map(_gutSeedItem).toList();
+    return gutenbergSeedItems();
   }
 
   @override

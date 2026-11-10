@@ -458,6 +458,9 @@ BookItem _gutSeedItem(Map<String, String> s) => BookItem(
       kind: 'book',
     );
 
+/* public: the offline-safe classics list for UI fallbacks */
+List<BookItem> gutenbergSeedItems() => gutenbergSeed.map(_gutSeedItem).toList();
+
 Future<String> gutenbergText(String bid) async {
   final id = bid.toString();
   /* direct candidates only — the old gutendex formats probe added a

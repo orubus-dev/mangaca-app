@@ -678,7 +678,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Widget _ttsTransport(Color fg) {
     final total = _sentences.length;
-    final pos = total == 0 ? 0 : ((_ttsIdx + 1) / total);
+    final pos = total == 0 ? 0.0 : ((_ttsIdx + 1) / total);
     return Container(
       margin: const EdgeInsets.fromLTRB(14, 0, 14, 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
