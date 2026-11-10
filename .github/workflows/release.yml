@@ -112,15 +112,23 @@ jobs:
           body: |
             MANGACA ${{ github.ref_name }} — Read Beyond The Illusion.
 
-            v0.0.2 "SYNCREAD":
+            v0.0.3 "SOURCERY":
 
-            - Boot hardening — feed renders instantly, every rail loads on its own with
-              hard timeouts + one-tap RETRY. No more stuck loading screen.
-            - COMICS class — WEB COMICS / 4-KOMA / ANTHOLOGY / ONESHOTS, device-direct.
-            - Classics & novels — covers fixed, topic rails, letter fallbacks.
-            - Read-aloud TTS — speed / tone / volume, sentence highlight, solid transport.
-            - Touch lock — explicit lock icon freezes all touches while you read.
-            - Delta self-updater — Settings › APP UPDATES: check → download → on-device
-              bsdiff rebuild → verify → install, idempotent progress bar.
+            - Comics fixed end-to-end: every MangaDex lane now auto-relays through
+              the runtime proxy if the device path fails, and the comics grid
+              falls back to AniList discovery — rows never dead-end again.
+            - NEW origin rails (all English-translated): Japanese Manga — Current,
+              Korean Manhwa — Current, Chinese Manhua — Current (AniList-backed).
+            - Novels & classics covers: SmartCover tries the image proxy, then the
+              direct CDN, then a clean letter tile — no more placeholder bubbles.
+            - Read-aloud TTS rebuilt on an epoch state machine: pause/resume/jump/
+              speed changes can no longer skip or repeat sentences (stale engine
+              events are dropped); error streaks pause cleanly instead of looping.
+            - Touch lock rebuilt: explicit padlock in the top bar, a lock badge that
+              stays visible while locked, and a thumb-friendly unlock pill. All
+              content touches are frozen; read-aloud keeps playing.
+            - TTS transport now stays on screen with chrome hidden.
+            - Delta self-updater unchanged (Settings › APP UPDATES) — this build
+              ships the first real delta: 0.0.2 → 0.0.3 as a bsdiff patch.
             - Package app.orubus.mangaca · signed release · genjutsu identity via @orubus_bot
           generate_release_notes: false

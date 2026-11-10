@@ -292,6 +292,11 @@ class _ForYouFeedState extends State<ForYouFeed> with AutomaticKeepAliveClientMi
   }
 
   void _openBook(BookItem b) {
+    if (b.sid == 'disco') {
+      // discovery card (AniList) — resolve into a readable source by title
+      _openTrendTitle(b.title, b.cover);
+      return;
+    }
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => DetailsPage(sid: b.sid, bid: b.bid, coverHint: b.cover),
     ));
@@ -391,12 +396,15 @@ class _ForYouFeedState extends State<ForYouFeed> with AutomaticKeepAliveClientMi
     switch (widget.kind) {
       case 'manga':
         return [
-          _mdTagRail('e197df38-d0e7-43b5-9b09-2842d0c326dd', 'WEB MANGA', 'MANGA'),
+          _mdOriginRail('ja', 'JAPANESE MANGA — CURRENT', 'MANGA', 'JP'),
+          _mdOriginRail('ko', 'KOREAN MANHWA — CURRENT', 'MANHWA', 'KR'),
+          _mdOriginRail('zh', 'CHINESE MANHUA — CURRENT', 'MANHUA', 'CN'),
           _mdGenreRail('Action', 'ACTION MANGA'),
           _mdGenreRail('Romance', 'ROMANCE MANGA'),
         ];
       case 'comic':
         return [
+          _mdTagRail(mdTagWebComic, 'WEB COMICS', 'COMICS'),
           _mdTagRail(mdTag4Koma, '4-KOMA COMICS', 'COMICS'),
           _mdTagRail(mdTagAnthology, 'ANTHOLOGY COMICS', 'COMICS'),
           _mdTagRail(mdTagOneshot, 'ONESHOTS', 'COMICS'),
@@ -437,6 +445,43 @@ class _ForYouFeedState extends State<ForYouFeed> with AutomaticKeepAliveClientMi
                   onTap: () => _openBook(b),
                 ))
             .toList();
+      },
+    );
+  }
+
+  /* origin rail — MangaDex originalLanguage lane (ja / ko / zh), English
+     translations only, freshest uploads first. AniList country discovery
+     backs it up if MangaDex is unreachable, so the rail is never dead. */
+  RailSection _mdOriginRail(String lang, String title, String label, String country) {
+    return RailSection(
+      key: ValueKey('$title-${widget.kind}'),
+      title: title,
+      loader: () async {
+        List<BookItem> rows = [];
+        try {
+          rows = await mdOriginal(lang, 1, orderBy: 'current', label: label);
+        } catch (_) {}
+        if (rows.isEmpty) {
+          try {
+            rows = await anilistCountry(country);
+          } catch (_) {}
+        }
+        return rows.take(12).map((b) {
+          if (b.sid == 'disco') {
+            return RailCardData(
+              cover: b.cover,
+              title: b.title,
+              sub: 'TAP TO FIND A SOURCE',
+              onTap: () => _openTrendTitle(b.title, b.cover),
+            );
+          }
+          return RailCardData(
+            cover: b.cover,
+            title: b.title,
+            sub: b.status.toUpperCase(),
+            onTap: () => _openBook(b),
+          );
+        }).toList();
       },
     );
   }
@@ -513,11 +558,7 @@ class _ForYouFeedState extends State<ForYouFeed> with AutomaticKeepAliveClientMi
             fit: StackFit.expand,
             children: [
               LetterCover(title: hero.title),
-              if (hero.cover.isNotEmpty)
-                Image.network(hero.cover,
-                    fit: BoxFit.cover,
-                    headers: const {'User-Agent': 'MANGACA/0.0.2 (Android)'},
-                    errorBuilder: (_, __, ___) => const SizedBox()),
+              if (hero.cover.isNotEmpty) SmartCover(url: hero.cover, fit: BoxFit.cover),
               Container(
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
@@ -599,7 +640,15 @@ class _PopularGridState extends State<_PopularGrid> {
           r = await mergedPopular(1).timeout(const Duration(seconds: 18));
           break;
         case 'comic':
-          r = await comicPopular(1).timeout(const Duration(seconds: 18));
+          try {
+            r = await comicPopular(1).timeout(const Duration(seconds: 18));
+          } catch (_) {}
+          if (r.isEmpty) {
+            // MangaDex unreachable — AniList 4-koma discovery keeps the grid alive
+            try {
+              r = await anilistTag('4-koma').timeout(const Duration(seconds: 14));
+            } catch (_) {}
+          }
           break;
         case 'novel':
           r = await _catalogLaneSafe('novel');

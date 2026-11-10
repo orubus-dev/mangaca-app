@@ -211,6 +211,84 @@ class LetterCover extends StatelessWidget {
   }
 }
 
+/* ---------- smart cover ----------
+   One widget, every cover host: tries the given URL first (our /api/img
+   proxy lane), and if that fails flips to the DIRECT original host — some
+   cover CDNs (novelbuddy's rs. host) aren't on the proxy allowlist but
+   serve fine from a real device; others (chikari) block devices and need
+   the proxy. The letter card underneath means a cover can never render as
+   a broken-image glyph — worst case is a clean letter tile. */
+class SmartCover extends StatefulWidget {
+  final String url;
+  final BoxFit fit;
+  final Map<String, String> headers;
+  const SmartCover({super.key, required this.url, this.fit = BoxFit.cover, this.headers = const {}});
+  @override
+  State<SmartCover> createState() => _SmartCoverState();
+}
+
+class _SmartCoverState extends State<SmartCover> {
+  late List<String> _candidates;
+  int _idx = 0;
+  int _gen = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _candidates = _candidatesFor(widget.url);
+  }
+
+  @override
+  void didUpdateWidget(covariant SmartCover old) {
+    super.didUpdateWidget(old);
+    if (old.url != widget.url) {
+      _candidates = _candidatesFor(widget.url);
+      _idx = 0;
+      _gen++;
+    }
+  }
+
+  static List<String> _candidatesFor(String url) {
+    if (url.isEmpty) return const [];
+    const base = 'https://mangaca.pages.dev';
+    const marker = '/api/img?u=';
+    if (url.contains(marker)) {
+      // proxied cover — the direct original is the fallback
+      final raw = url.substring(url.indexOf(marker) + marker.length);
+      final inner = Uri.decodeComponent(raw);
+      return (inner.isNotEmpty && inner != url) ? [url, inner] : [url];
+    }
+    if (url.startsWith('http')) {
+      // direct cover — the runtime proxy is the fallback
+      return [url, '$base/api/img?u=${Uri.encodeComponent(url)}'];
+    }
+    if (url.startsWith('/')) return ['$base$url'];
+    return [url];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_idx >= _candidates.length) return const SizedBox(); // letter tile shows through
+    final gen = _gen;
+    return Image.network(
+      _candidates[_idx],
+      fit: widget.fit,
+      headers: widget.headers.isEmpty
+          ? const {'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36 MANGACA/0.0.3'}
+          : widget.headers,
+      errorBuilder: (_, __, ___) {
+        if (gen == _gen && _idx < _candidates.length - 1) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || gen != _gen) return;
+            setState(() => _idx += 1);
+          });
+        }
+        return const SizedBox();
+      },
+    );
+  }
+}
+
 class BookCard extends StatelessWidget {
   final BookItem item;
   final VoidCallback onTap;
@@ -230,14 +308,7 @@ class BookCard extends StatelessWidget {
             children: [
               LetterCover(title: item.title),
               if (item.cover.isNotEmpty)
-                Image.network(
-                  item.cover,
-                  fit: BoxFit.cover,
-                  headers: const {'User-Agent': 'MANGACA/0.0.2 (Android)'},
-                  errorBuilder: (_, __, ___) => const SizedBox(),
-                  loadingBuilder: (c, w, prog) =>
-                      prog == null ? w : const ColoredBox(color: Color(0x00000000)),
-                ),
+                SmartCover(url: item.cover, fit: BoxFit.cover),
               Positioned(
                 top: 6,
                 left: 6,
@@ -319,13 +390,7 @@ class RailCard extends StatelessWidget {
                       fit: StackFit.expand,
                       children: [
                         LetterCover(title: title),
-                        if (cover.isNotEmpty)
-                          Image.network(
-                            cover,
-                            fit: BoxFit.cover,
-                            headers: const {'User-Agent': 'MANGACA/0.0.2 (Android)'},
-                            errorBuilder: (_, __, ___) => const SizedBox(),
-                          ),
+                        if (cover.isNotEmpty) SmartCover(url: cover, fit: BoxFit.cover),
                       ],
                     ),
                   ),

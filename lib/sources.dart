@@ -243,11 +243,38 @@ final originals = Source(
   },
 );
 
-/* ---------- MANGADEX (device-direct on purpose — same as the web) ---------- */
+/* ---------- MANGADEX (device-direct with a server-relay fallback) ----------
+   Primary path: the user's own connection (fast, proven). If the device
+   can't reach MangaDex at all (carrier DNS, aggressive filtering, CF
+   challenge), every call automatically retries through OUR runtime's
+   /api/proxy lane (api.mangadex.org is allowlisted there) — so the catalog
+   can never come up empty just because one path failed. */
 
 const _mdApi = 'https://api.mangadex.org';
 const _mdLimit = 20;
 const _mdRatings = '&contentRating[]=safe&contentRating[]=suggestive';
+
+/* browser-like UA — some networks/CDNs treat exotic app UAs worse */
+const mdUa =
+    'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36 MANGACA/0.0.3';
+
+Future<Map<String, dynamic>> _mdJson(String url) async {
+  // path 1 — device-direct
+  try {
+    final r = await http
+        .get(Uri.parse(url), headers: {'User-Agent': mdUa, 'Accept': 'application/json'})
+        .timeout(const Duration(seconds: 12));
+    if (r.statusCode == 200) {
+      return jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+    }
+  } catch (_) {}
+  // path 2 — our runtime relay (same contract, server egress)
+  final r2 = await http
+      .get(Uri.parse(api.px(url)), headers: {'User-Agent': 'MANGACA/0.0.3 (Android)'})
+      .timeout(const Duration(seconds: 20));
+  if (r2.statusCode != 200) throw ApiException('mangadex ${r2.statusCode}');
+  return jsonDecode(utf8.decode(r2.bodyBytes)) as Map<String, dynamic>;
+}
 
 String _mdCover(String mangaId, List<dynamic> rels) {
   for (final r in rels) {
@@ -283,15 +310,9 @@ BookItem _mdItem(Map<String, dynamic> item) {
   );
 }
 
-Future<Map<String, dynamic>> _mdJson(String url) async {
-  final r = await http
-      .get(Uri.parse(url), headers: {'User-Agent': 'MANGACA/0.0.1 (Android)'})
-      .timeout(const Duration(seconds: 15));
-  if (r.statusCode != 200) throw ApiException('mangadex ${r.statusCode}');
-  return jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
-}
 
-/* comics lane — MangaDex tag catalogs, device-direct (same tags as web):
+
+/* comics lane — MangaDex tag catalogs (same tags as web):
    Web Comic / 4-Koma / Anthology / Oneshot. */
 const mdTagWebComic = 'e197df38-d0e7-43b5-9b09-2842d0c326dd';
 const mdTag4Koma = 'b11fda93-8f1d-4bef-b2ed-8803d3733170';
@@ -317,10 +338,37 @@ Future<List<BookItem>> mdByTag(String tag, int page, {String label = 'COMICS'}) 
       .toList();
 }
 
+/* origin lanes — JAPANESE manga / KOREAN manhwa / CHINESE manhua, all with
+   English translations available (availableTranslatedLanguage[]=en).
+   orderBy: followedCount = most-read, latestUploadedChapter = most current. */
+Future<List<BookItem>> mdOriginal(String lang, int page,
+    {String orderBy = 'followedCount', String label = 'MANGA'}) async {
+  final p = page < 1 ? 1 : page;
+  final orderKey = orderBy == 'current' ? 'latestUploadedChapter' : 'followedCount';
+  final j = await _mdJson(
+      '$_mdApi/manga?limit=$_mdLimit&offset=${(p - 1) * _mdLimit}&includes[]=cover_art'
+      '&originalLanguage[]=${Uri.encodeComponent(lang)}'
+      '&availableTranslatedLanguage[]=en'
+      '&hasAvailableChapters=true&order[$orderKey]=desc$_mdRatings');
+  return ((j['data'] as List?) ?? const [])
+      .whereType<Map<String, dynamic>>()
+      .map(_mdItem)
+      .map((b) => BookItem(
+            sid: b.sid,
+            bid: b.bid,
+            title: b.title,
+            cover: b.cover,
+            src: label,
+            kind: 'manga',
+            status: b.status,
+          ))
+      .toList();
+}
+
 Future<List<BookItem>> comicPopular(int page) => mdByTag(mdTagWebComic, page);
 Future<List<BookItem>> comicLatest(int page) async {
   final j = await _mdJson(
-      '$_mdApi/manga?limit=$_mdLimit&offset=${(page - 1) * _mdLimit}&includes[]=cover_art&includedTags[]=${Uri.encodeComponent(mdTagWebComic)}&includedTagsMode=AND&hasAvailableChapters=true&order[latestUploaded]=desc$_mdRatings');
+      '$_mdApi/manga?limit=$_mdLimit&offset=${(page - 1) * _mdLimit}&includes[]=cover_art&includedTags[]=${Uri.encodeComponent(mdTagWebComic)}&includedTagsMode=AND&hasAvailableChapters=true&order[latestUploadedChapter]=desc$_mdRatings');
   return ((j['data'] as List?) ?? const [])
       .whereType<Map<String, dynamic>>()
       .map(_mdItem)
@@ -348,7 +396,7 @@ final mangadex = Source(
   },
   latest: (page) async {
     final j = await _mdJson(
-        '$_mdApi/manga?limit=$_mdLimit&offset=${(page - 1) * _mdLimit}&includes[]=cover_art&order[latestUploaded]=desc&hasAvailableChapters=true$_mdRatings');
+        '$_mdApi/manga?limit=$_mdLimit&offset=${(page - 1) * _mdLimit}&includes[]=cover_art&order[latestUploadedChapter]=desc&hasAvailableChapters=true$_mdRatings');
     return ((j['data'] as List?) ?? const []).whereType<Map<String, dynamic>>().map(_mdItem).toList();
   },
   search: (q, page) async {
@@ -693,6 +741,63 @@ Future<List<BookItem>> anilistGenre(String genre) async {
         final title = ((t['english'] ?? t['romaji'] ?? '') as String).trim();
         final cov = ((m['coverImage'] as Map<String, dynamic>?)?['large'] ?? '') as String;
         return BookItem(sid: 'disco', bid: '', title: title, cover: cov, src: 'MANGA', kind: 'manga');
+      })
+      .where((b) => b.title.isNotEmpty)
+      .toList();
+}
+
+/* AniList origin discovery — countryOfOrigin lanes (JP manga / KR manhwa /
+   CN manhua). Bot-friendly and fast; used as the fallback when MangaDex
+   can't answer, and as the discovery rail for CURRENT titles. Items are
+   discovery cards (sid 'disco') that resolve into a readable source on tap. */
+Future<List<BookItem>> anilistCountry(String country, {int perPage = 14}) async {
+  final q =
+      'query(\$c:String){Page(page:1,perPage:$perPage){media(sort:TRENDING_DESC,countryOfOrigin:\$c,type:MANGA,isAdult:false){title{english romaji}coverImage{large}}}}';
+  final r = await http
+      .post(
+        Uri.parse('https://graphql.anilist.co'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'query': q, 'variables': {'c': country}}),
+      )
+      .timeout(const Duration(seconds: 12));
+  if (r.statusCode != 200) throw ApiException('anilist ${r.statusCode}');
+  final j = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+  final page = (j['data'] as Map<String, dynamic>?)?['Page'] as Map<String, dynamic>?;
+  final media = (page?['media'] as List?) ?? const [];
+  return media
+      .whereType<Map<String, dynamic>>()
+      .map((m) {
+        final t = (m['title'] as Map<String, dynamic>?) ?? {};
+        final title = ((t['english'] ?? t['romaji'] ?? '') as String).trim();
+        final cov = ((m['coverImage'] as Map<String, dynamic>?)?['large'] ?? '') as String;
+        return BookItem(sid: 'disco', bid: '', title: title, cover: cov, src: 'MANGA', kind: 'manga');
+      })
+      .where((b) => b.title.isNotEmpty)
+      .toList();
+}
+
+/* AniList tag discovery — powers the comics fallback (4-koma tag etc.) */
+Future<List<BookItem>> anilistTag(String tag, {int perPage = 14}) async {
+  final q =
+      'query(\$t:String){Page(page:1,perPage:$perPage){media(sort:TRENDING_DESC,tag:\$t,type:MANGA,isAdult:false){title{english romaji}coverImage{large}}}}';
+  final r = await http
+      .post(
+        Uri.parse('https://graphql.anilist.co'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'query': q, 'variables': {'t': tag}}),
+      )
+      .timeout(const Duration(seconds: 12));
+  if (r.statusCode != 200) throw ApiException('anilist ${r.statusCode}');
+  final j = jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+  final page = (j['data'] as Map<String, dynamic>?)?['Page'] as Map<String, dynamic>?;
+  final media = (page?['media'] as List?) ?? const [];
+  return media
+      .whereType<Map<String, dynamic>>()
+      .map((m) {
+        final t = (m['title'] as Map<String, dynamic>?) ?? {};
+        final title = ((t['english'] ?? t['romaji'] ?? '') as String).trim();
+        final cov = ((m['coverImage'] as Map<String, dynamic>?)?['large'] ?? '') as String;
+        return BookItem(sid: 'disco', bid: '', title: title, cover: cov, src: 'COMICS', kind: 'comic');
       })
       .where((b) => b.title.isNotEmpty)
       .toList();

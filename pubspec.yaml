@@ -1,7 +1,7 @@
 name: mangaca
 description: MANGACA — Read Beyond The Illusion. Manga, novels, classics and full TV & movie streaming.
 publish_to: 'none'
-version: 0.0.2+2
+version: 0.0.3+3
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

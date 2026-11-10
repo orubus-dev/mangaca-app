@@ -71,12 +71,21 @@ class _ReaderPageState extends State<ReaderPage> {
   /* touch lock — the explicit lock the reader never had */
   bool _locked = false;
 
-  /* ---------- tts ---------- */
+  /* ---------- tts ----------
+     Epoch state machine: EVERY control action (start/pause/resume/jump/
+     settings change/chapter change) bumps _ttsEpoch. Utterances stamp the
+     epoch they were started under, and the engine handlers ignore any
+     event from a stale epoch — so a stop() that fires a late completion
+     or error (the classic Android TTS bug) can never skip sentences,
+     double-advance or resurrect itself after a pause. */
   FlutterTts? _tts;
   bool _ttsActive = false; // session on (transport visible)
   bool _ttsPaused = false;
   int _ttsIdx = 0;
   int _ttsShownIdx = -1; // highlighted sentence
+  int _ttsEpoch = 0;
+  int _ttsSpokenEpoch = -1;
+  int _ttsErrors = 0; // consecutive engine errors (retry cap)
   List<String> _sentences = [];
   List<int> _sentencePara = []; // paragraph index per sentence
   List<GlobalKey> _paraKeys = [];
@@ -249,8 +258,27 @@ class _ReaderPageState extends State<ReaderPage> {
                   child: _body(),
                 ),
               ),
-              _chrome(p),
-              /* floating unlock pill — the only tappable thing while locked */
+              if (!_locked) _chrome(p),
+              /* the lock badge — ALWAYS visible while locked, chrome or not.
+                 It is the fixed, unmissable anchor the old build never had. */
+              if (_locked)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 10,
+                  right: 14,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _locked = false),
+                    child: Container(
+                      padding: const EdgeInsets.all(9),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.82),
+                        border: Border.all(color: const Color(0xFFFFB84D), width: 1.4),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: const Icon(Icons.lock, color: Color(0xFFFFB84D), size: 18),
+                    ),
+                  ),
+                ),
+              /* floating unlock pill — the big, thumb-friendly unlock */
               if (_locked)
                 Positioned(
                   right: 14,
@@ -558,17 +586,33 @@ class _ReaderPageState extends State<ReaderPage> {
     await t.setPitch(_ttsPitch);
     await t.setVolume(_ttsVolume);
     await t.awaitSpeakCompletion(false); // handlers drive everything (see header)
-    t.setStartHandler(() {});
+    t.setStartHandler(() {
+      _ttsErrors = 0; // a clean start clears the error streak
+    });
     t.setCompletionHandler(() {
       if (!_ttsActive || _ttsPaused) return;
+      if (_ttsSpokenEpoch != _ttsEpoch) return; // stale event from a stopped utterance
       _ttsIdx = (_ttsIdx + 1).clamp(0, _sentences.isEmpty ? 0 : _sentences.length);
       if (mounted) setState(() {});
       _speakCurrent();
     });
-    t.setCancelHandler(() {});
+    t.setCancelHandler(() {
+      /* cancel arrives on stop() — the epoch guard makes it a no-op for
+         stale utterances and a harmless one for deliberate stops */
+    });
     t.setErrorHandler((msg) {
-      // engine hiccup — skip to the next sentence instead of dying silently
       if (!_ttsActive || _ttsPaused) return;
+      if (_ttsSpokenEpoch != _ttsEpoch) return; // stale — ignore
+      _ttsErrors += 1;
+      if (_ttsErrors >= 3) {
+        // engine is failing repeatedly — stop cleanly instead of looping
+        _ttsEpoch++;
+        if (mounted) {
+          setState(() => _ttsPaused = true);
+          toast(context, 'Read-aloud hit an engine error — paused. Tap play to retry.', err: true);
+        }
+        return;
+      }
       _ttsIdx = (_ttsIdx + 1).clamp(0, _sentences.isEmpty ? 0 : _sentences.length);
       if (mounted) setState(() {});
       Future.delayed(const Duration(milliseconds: 120), _speakCurrent);
@@ -588,21 +632,26 @@ class _ReaderPageState extends State<ReaderPage> {
       await t.setSpeechRate(_ttsRate);
       await t.setPitch(_ttsPitch);
       await t.setVolume(_ttsVolume);
+      _ttsSpokenEpoch = _ttsEpoch; // this utterance is the current one
       if (mounted) setState(() => _ttsShownIdx = _ttsIdx);
       _ensureVisibleSentence(_ttsIdx);
       await t.speak(_sentences[_ttsIdx]);
     } catch (_) {
       // speak failed — pause the session rather than spin
+      _ttsEpoch++;
       if (mounted) setState(() => _ttsPaused = true);
     }
   }
 
   void _ttsFinish() {
+    _ttsEpoch++;
     _ttsActive = false;
     _ttsPaused = false;
     _ttsShownIdx = -1;
-    if (mounted) setState(() {});
-    toast(context, 'Finished — that was the whole chapter');
+    if (mounted) {
+      setState(() {});
+      toast(context, 'Finished — that was the whole chapter');
+    }
   }
 
   Future<void> _ttsStart({int? fromSentence}) async {
@@ -612,16 +661,18 @@ class _ReaderPageState extends State<ReaderPage> {
       return;
     }
     final t = await _ttsEngine();
+    _ttsEpoch++; // invalidate anything the engine still owes us
     setState(() {
       _ttsActive = true;
       _ttsPaused = false;
       _ttsIdx = (fromSentence ?? _sentenceAtViewport()).clamp(0, _sentences.length - 1);
     });
-    await t.stop(); // clear anything pending
+    await t.stop(); // clear anything pending (stale events now guarded)
     _speakCurrent();
   }
 
   Future<void> _ttsPause() async {
+    _ttsEpoch++; // any completion/error racing this stop is now stale
     setState(() => _ttsPaused = true);
     try {
       await _tts?.stop(); // cancel handler is a no-op — index stays put
@@ -629,6 +680,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _ttsResume() async {
+    _ttsEpoch++;
     setState(() => _ttsPaused = false);
     _speakCurrent();
   }
@@ -643,6 +695,7 @@ class _ReaderPageState extends State<ReaderPage> {
 
   Future<void> _ttsJump(int delta) async {
     if (!_ttsActive) return;
+    _ttsEpoch++;
     final next = (_ttsIdx + delta).clamp(0, _sentences.isEmpty ? 0 : _sentences.length - 1);
     setState(() => _ttsIdx = next);
     try {
@@ -656,6 +709,7 @@ class _ReaderPageState extends State<ReaderPage> {
   Future<void> _ttsApply(double rate, double pitch, double volume) async {
     Store.settings.tts..rate = rate..pitch = pitch..volume = volume;
     Store.saveSettings();
+    _ttsEpoch++;
     setState(() {});
     if (_ttsActive) {
       try {
@@ -666,6 +720,7 @@ class _ReaderPageState extends State<ReaderPage> {
   }
 
   Future<void> _ttsStopHard() async {
+    _ttsEpoch++;
     _ttsActive = false;
     _ttsPaused = false;
     _ttsShownIdx = -1;
@@ -741,11 +796,25 @@ class _ReaderPageState extends State<ReaderPage> {
   bool _chromeOn = true;
 
   Widget _chrome(Palette p) {
-    if (!_chromeOn && !_locked) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => setState(() => _chromeOn = true),
-        child: const SizedBox.expand(),
+    if (!_chromeOn) {
+      /* chrome hidden — but a live read-aloud session keeps its transport
+         on screen (tappable), because "where is pause?" was half of the
+         buggy-controls complaint */
+      return Stack(
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _chromeOn = true),
+            child: const SizedBox.expand(),
+          ),
+          if (isText && _ttsActive && !_locked)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: MediaQuery.of(context).padding.bottom + 8,
+              child: _ttsTransport(mode == 'text' ? _textColors.$2 : Colors.white),
+            ),
+        ],
       );
     }
     final barColor = mode == 'text' ? _textColors.$1.withOpacity(0.94) : Colors.black87;
@@ -800,16 +869,13 @@ class _ReaderPageState extends State<ReaderPage> {
               const SizedBox(width: 6),
               /* the touch lock — explicit, always visible in chrome */
               IconButton(
-                onPressed: () => setState(() {
-                  _locked = !_locked;
-                  if (_locked) _chromeOn = false; // lock hides chrome; unlock pill stays
-                }),
+                onPressed: () => setState(() => _locked = true),
                 icon: Icon(
-                  _locked ? Icons.lock : Icons.lock_open,
+                  Icons.lock_open,
                   size: 19,
-                  color: _locked ? const Color(0xFFFFB84D) : fg.withOpacity(0.85),
+                  color: fg.withOpacity(0.85),
                 ),
-                tooltip: _locked ? 'Touch lock is ON — tap the pill to unlock' : 'Lock touches (read without accidental taps)',
+                tooltip: 'Lock touches (read without accidental taps)',
               ),
               const SizedBox(width: 2),
               GestureDetector(

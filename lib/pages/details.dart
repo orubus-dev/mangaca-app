@@ -175,9 +175,7 @@ class _DetailsPageState extends State<DetailsPage> {
               height: 158,
               color: p.bg3,
               child: book!.cover.isNotEmpty
-                  ? Image.network(book!.cover, fit: BoxFit.cover,
-                      headers: const {'User-Agent': 'MANGACA/0.0.1 (Android)'},
-                      errorBuilder: (_, __, ___) => const SizedBox())
+                  ? SmartCover(url: book!.cover, fit: BoxFit.cover)
                   : const SizedBox(),
             ),
           ),

@@ -74,9 +74,7 @@ class _HistoryPageState extends State<HistoryPage> with AutomaticKeepAliveClient
                             height: 62,
                             color: p.bg3,
                             child: h.cover.isNotEmpty
-                                ? Image.network(h.cover, fit: BoxFit.cover,
-                                    headers: const {'User-Agent': 'MANGACA/0.0.1 (Android)'},
-                                    errorBuilder: (_, __, ___) => const SizedBox())
+                                ? SmartCover(url: h.cover, fit: BoxFit.cover)
                                 : const SizedBox(),
                           ),
                         ),

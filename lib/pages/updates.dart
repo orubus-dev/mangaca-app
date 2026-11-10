@@ -115,9 +115,7 @@ class _UpdatesPageState extends State<UpdatesPage> with AutomaticKeepAliveClient
                   height: 62,
                   color: p.bg3,
                   child: ((r.book['cover'] ?? '') as String).isNotEmpty
-                      ? Image.network((r.book['cover'] ?? '') as String, fit: BoxFit.cover,
-                          headers: const {'User-Agent': 'MANGACA/0.0.1 (Android)'},
-                          errorBuilder: (_, __, ___) => const SizedBox())
+                      ? SmartCover(url: (r.book['cover'] ?? '') as String, fit: BoxFit.cover)
                       : const SizedBox(),
                 ),
               ),
