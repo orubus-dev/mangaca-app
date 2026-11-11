@@ -8,6 +8,7 @@ import '../models.dart';
 import '../sources.dart';
 import '../store.dart';
 import '../widgets.dart';
+import '../comments.dart' show showBookComments;
 import '../main.dart' show openAuthSheet;
 import 'reader.dart';
 
@@ -358,8 +359,11 @@ class _DetailsPageState extends State<DetailsPage> {
                       child: InfoChip('☆ ${social!.favorites}'),
                     ),
                     const Spacer(),
-                    Text('${social!.comments.length} COMMENTS',
-                        style: tMono(9.5).copyWith(color: p.faint)),
+                    GestureDetector(
+                      onTap: () => showBookComments(context, book: mangaId),
+                      child: Text('${social!.comments.length} COMMENTS · VIEW',
+                          style: tMono(9.5, w: FontWeight.w700).copyWith(color: p.fg, letterSpacing: 0.6)),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -368,7 +372,7 @@ class _DetailsPageState extends State<DetailsPage> {
                     final m = c as Map<String, dynamic>;
                     final uname = ((m['username'] ?? m['user'] ?? '') ?? '').toString();
                     final body = ((m['body'] ?? m['text'] ?? '') ?? '').toString();
-                    final at = DateTime.tryParse((m['created_at'] ?? '') as String)?.millisecondsSinceEpoch ?? 0;
+                    final at = DateTime.tryParse(((m['at'] ?? m['created_at']) ?? '') as String)?.millisecondsSinceEpoch ?? 0;
                     return Container(
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(9),

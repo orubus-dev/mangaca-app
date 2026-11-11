@@ -17,6 +17,7 @@ import '../models.dart';
 import '../sources.dart';
 import '../store.dart';
 import '../widgets.dart';
+import '../comments.dart' show showBookComments;
 
 Future<void> openReader(
   BuildContext context, {
@@ -867,6 +868,18 @@ class _ReaderPageState extends State<ReaderPage> {
                   ),
                 ),
               const SizedBox(width: 6),
+              /* chapter comments — scoped to the chapter on screen */
+              IconButton(
+                onPressed: () => showBookComments(
+                  context,
+                  book: '${widget.book.sid}:${widget.book.bid}',
+                  chapter: chapter.cid,
+                  chapterLabel: chapter.title,
+                ),
+                icon: Icon(Icons.mode_comment_outlined, size: 19, color: fg.withOpacity(0.85)),
+                tooltip: 'Chapter comments',
+              ),
+              const SizedBox(width: 2),
               /* the touch lock — explicit, always visible in chrome */
               IconButton(
                 onPressed: () => setState(() => _locked = true),

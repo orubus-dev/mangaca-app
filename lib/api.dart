@@ -122,8 +122,17 @@ Future<Map<String, dynamic>> socialState(String book) =>
 Future<Map<String, dynamic>> socialLike(String book) => post('/api/social/like', {'book': book});
 Future<Map<String, dynamic>> socialFavorite(String book) =>
     post('/api/social/favorite', {'book': book});
-Future<Map<String, dynamic>> socialComment(String book, String body, {String chapter = ''}) =>
-    post('/api/social/comment', {'book': book, 'body': body, 'chapter': chapter});
+Future<Map<String, dynamic>> socialComment(String book, String body, {String chapter = '', String parent = ''}) =>
+    post('/api/social/comment', {'book': book, 'body': body, 'chapter': chapter, if (parent.isNotEmpty) 'parent': parent});
+Future<Map<String, dynamic>> socialComments(String book, {String chapter = '', String parent = '', int page = 1}) {
+  final q = <String>['book=${Uri.encodeComponent(book)}'];
+  if (chapter.isNotEmpty) q.add('chapter=${Uri.encodeComponent(chapter)}');
+  if (parent.isNotEmpty) q.add('parent=${Uri.encodeComponent(parent)}');
+  q.add('page=$page');
+  return get('/api/social/comments?${q.join('&')}');
+}
+Future<Map<String, dynamic>> socialCommentLike(String id) => post('/api/social/comment/like', {'id': id});
+Future<Map<String, dynamic>> socialCommentDelete(String id) => post('/api/social/comment/delete', {'id': id});
 Future<Map<String, dynamic>> librarySet(String book, String? status, {bool remove = false}) =>
     post('/api/social/library', {'book': book, 'status': status, 'remove': remove});
 
